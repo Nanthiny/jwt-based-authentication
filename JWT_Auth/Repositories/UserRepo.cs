@@ -2,6 +2,7 @@
 using JWT_Auth.Dtos;
 using JWT_Auth.Interfaces;
 using JWT_Auth.Models;
+using JWT_Auth.Service;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.IdentityModel.Tokens;
 using System.Data;
@@ -14,11 +15,13 @@ namespace JWT_Auth.Repositories
 	public class UserRepo : IUserRepo
 	{
 		private readonly SystemDbContext _context;
+		private readonly TokenService _service;
 		private readonly IConfiguration _configuration;
-		public UserRepo(SystemDbContext context,IConfiguration configuration)
+		public UserRepo(SystemDbContext context,IConfiguration configuration, TokenService service)
 		{
 				_context=context;
 			_configuration = configuration;
+			_service = service;
 		}
 		//find existing user based on credentials
 		public async Task<User> GetUserExistAsync(LoginRequest user)
@@ -29,14 +32,19 @@ namespace JWT_Auth.Repositories
 
 		public async Task<AuthResponse> LoginAsync(User user)
 		{
+			//get generated refresh token value
+			var refreshToken = GenerateRefreshToken();
 			//create a new AuthResponse object to store the user's email, username, token, and role.
 			var authUser = new AuthResponse
 			{
 				Email = user.Email,
 				UserName = user.Username,
 				Token = await GenerateToken(user),
-				Role = user.RoleId==null ? null: (await GetRoleById(user.RoleId))
+				Role = user.RoleId==null ? null: (await GetRoleById(user.RoleId)),
+				RefreshToken= refreshToken
 			};
+			//save the refresh token to the database.
+			await _service.SaveRefreshToken(user.Email, refreshToken);
 			return authUser;
 		}
 		//get user role name by Id
@@ -56,7 +64,7 @@ namespace JWT_Auth.Repositories
 			await _context.SaveChangesAsync();
 			return userObj;
 		}
-		private async Task<string> GenerateToken(User user)
+		public async Task<string> GenerateToken(User user)
 		{
 			// Creates a new symmetric security key from the JWT key specified in the app configuration.
 			var securityKey = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(_configuration["Jwt:Key"]));
@@ -83,11 +91,27 @@ namespace JWT_Auth.Repositories
 				issuer: _configuration["Jwt:Issuer"],
 				audience: _configuration["Jwt:Audience"],
 				claims: claims,
-				expires: DateTime.Now.AddMinutes(5), // Token expiration set to 1 hour from the current time.
+				expires: DateTime.Now.AddHours(1), // Token expiration set to 1 hour from the current time.
 				signingCredentials: credentials);
 			// Serializes the JWT token to a string and returns it.
 			return new JwtSecurityTokenHandler().WriteToken(token);
 			
 		}
+		public string GenerateRefreshToken()
+		{
+			var randomNumber = new byte[32];  // Prepare a buffer to hold the random bytes.
+			using (var rng = System.Security.Cryptography.RandomNumberGenerator.Create())
+			{
+				rng.GetBytes(randomNumber);  // Fill the buffer with cryptographically strong random bytes.
+				return Convert.ToBase64String(randomNumber);  // Convert the bytes to a Base64 string and return.
+			}
+			
+		}
+
+		public async Task<User> GetUserByEmailExistAsync(string email)
+		{
+			return await _context.Users.FirstOrDefaultAsync(x => x.Email == email);
+		}
+	
 	}
 }

@@ -1,6 +1,7 @@
 using JWT_Auth.DbContexts;
 using JWT_Auth.Interfaces;
 using JWT_Auth.Repositories;
+using JWT_Auth.Service;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.IdentityModel.Tokens;
@@ -33,6 +34,7 @@ builder.Services.AddDbContext<SystemDbContext>(options =>
 	options.UseSqlServer(builder.Configuration.GetConnectionString("SystemDbConnection"));
 });
 builder.Services.AddScoped<IUserRepo, UserRepo>();
+builder.Services.AddScoped<TokenService>();
 var app = builder.Build();
 
 // Configure the HTTP request pipeline.
@@ -46,5 +48,5 @@ app.UseAuthentication();
 app.UseAuthorization();
 
 app.MapControllers();
-
+app.UseExceptionHandler();
 app.Run();

@@ -8,5 +8,9 @@ namespace JWT_Auth.Interfaces
 		Task<User> RegisterAsync(RegisterRequest user);
 		Task<AuthResponse> LoginAsync(User user);
 		Task<User> GetUserExistAsync(LoginRequest user);
+		Task<User> GetUserByEmailExistAsync(string email);
+		Task<string> GenerateToken(User user);
+		string GenerateRefreshToken();
+	
 	}
 }
